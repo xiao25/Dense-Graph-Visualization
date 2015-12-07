@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>county-trade-network</title>
+    <script src="assets/lib/d3.v3.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+
+    <script async defer
+            src="https://maps.googleapis.com/maps/api/js">
+    </script>
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <style type="text/css">
+        img {
+            max-width: 100%;
+        }
+        body {
+            margin: 0;
+            font: 17px helvetica, sans-serif;
+            background: #353535;
+            width: 100%;
+            height: 900px;
+        }
+
+        .node {
+            cursor: pointer;
+        }
+
+        .background {
+            -webkit-opacity: .20;
+        }
+
+
+        .link {
+            stroke-width: 0.3;
+
+        }
+
+        .link.hover {
+            stroke-width: 2.0;
+            stroke: #C3FF68;
+        }
+
+        .overlay {
+            fill: none;
+            pointer-events: all;
+        }
+
+        text {
+            max-width: 40px;
+            overflow: hidden;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #sidebar {
+            background: rgba(29, 29, 29, 0.93);
+            width: 30%;
+            position: absolute;
+            height: 900px;
+            color: #b3b3b3;
+        }
+
+        #sidebar p {
+            padding: 20px;
+            margin: 0;
+            margin-bottom: 20px;
+        }
+
+        .nodes-info, .edges-info {
+            margin: 0;
+            padding: 0;
+            margin-bottom: 20px;
+        }
+
+        .nodes-info li, .edges-info li {
+            padding: 2px;
+            margin: 0 0 0 15px;
+            list-style: none;
+            font-size: 15px;
+            padding-left: 30px;
+        }
+
+        #sidebar h3 {
+            padding: 10px 15px;
+            margin: 0;
+            color: #fbf0f7;
+        }
+
+        .nodes-info li em {
+            display: inline-block;
+            width: 17px;
+            position: absolute;
+            height: 17px;
+            background: green;
+            margin-left: -25px;
+            border-radius: 50%;
+        }
+
+        .edges-info li em {
+            display: inline-block;
+            width: 20px;
+            position: absolute;
+            height: 3px;
+            margin-top: 8px;
+            background: purple;
+            margin-left: -25px;
+        }
+        .map {
+            margin-left: 30%;
+            width: 70%;
+            height: 100%;
+        }
+
+        .stations, .stations svg {
+            position: absolute;
+        }
+        .SvgOverlay path {
+            stroke: Orange;
+            stroke-width: 2px;
+            fill: Orange;
+            fill-opacity: .3;
+        }
+
+        .stations svg {
+            width: 60px;
+            height: 20px;
+            padding-right: 100px;
+            font: 10px sans-serif;
+        }
+
+        /*.stations circle {*/
+        /*fill: brown;*/
+        /*stroke: black;*/
+        /*stroke-width: 1px;*/
+        /*}*/
+
+        path {
+            fill: none;
+            stroke: red;
+
+        }
+        .markers {
+            position: absolute;
+        }
+
+        svg.pts {
+            position: absolute;
+        }
+        .markers border {
+            position: absolute;
+            stroke: black;
+            stroke-width: 2px;
+        }
+        .markers svg.pts {
+            width: 60px;
+            height: 20px;
+            padding-right: 100px;
+            font: 10px sans-serif;
+        }
+        .markers circle {
+            fill: brown;
+            stroke: black;
+            stroke-width: 1.5px;
+        }
+    </style>
+</head>
+<body onload="initialize()">
+
+<div id="sidebar">
+    <header>
+        <h2>Huge Complete Network Visualization</h2>
+        <p>
+            A nearly complete graph with counties info and the trade amount among them.
+        </p>
+    </header>
+    <h3>Nodes</h3>
+    <ul class="nodes-info"></ul>
+    <h3>Edges</h3>
+    <ul class="edges-info"></ul>
+</div>
+
+<div class="map col-md-8" id="map">
+</div>
+
+<script type="text/javascript">
+
+
+//    <!--Google Map-->
+function initialize(){
+    map = new google.maps.Map(d3.select("#map").node(), {
+        zoom: 2,
+        center: new google.maps.LatLng(43, -175),
+        mapTypeId: google.maps.MapTypeId.TERRAIN
+    });
+
+    google.maps.event.addListener(map, "rightclick", function(event) {
+        var lat = event.latLng.lat();
+        var lng = event.latLng.lng();
+        // populate yor box/field with lat, lng
+        console.log("Lat=" + lat + "; Lng=" + lng);
+    });
+
+
+
+    var nodeColors ={
+        "county" : "rgba(249, 191, 59, 0.1)"//,
+        //        "Computer Scientist": "#FF0066",
+        //        "Foundation": "#FFFF00",
+        //        "Dialect": "#6CDFEA",
+        //        "Implementation": "#C3FF68"
+    };
+
+    var edgeColors = {
+        "Trade amount":"#FF0066"//,
+        //        "Designed by":  "#6b6b6b",
+        //        "Developer": "#FFFF00",
+        //        "Dialects": "#6CDFEA",
+        //        "Major implementations": "#C3FF68",
+        //        "Implementation language": "#FFD0D4"
+    };
+
+    /**
+     * add texts into sidebar about node
+     */
+    var nodeGroupInfo = d3.select(".nodes-info")
+            .selectAll("li")
+            .data(d3.keys(nodeColors))
+            .enter()
+            .append("li");
+    nodeGroupInfo.append("em").attr("style", function (d) {
+        return "background: " + nodeColors[d];
+    });
+    nodeGroupInfo.append("span").text(function (d) {return d}, "span");
+
+    /**
+     * add texts into sidebar about edge
+     */
+    var edgeInfo = d3.select(".edges-info")
+            .selectAll("li")
+            .data(d3.keys(edgeColors))
+            .enter()
+            .append("li");
+    edgeInfo.append("em").attr("style", function (d) {
+        return "background: " + edgeColors[d];
+    });
+    edgeInfo.append("span").text(function (d) {return d}, "span");
+
+    var graphSource;
+// Load the station data. When the data comes back, create an overlay.
+    d3.json("scripts/county_10000_new.json", function(data) {
+        graphSource = data;
+        var overlay = new google.maps.OverlayView();
+        var projection;
+        function _projection(lat, lng) {
+            e = new google.maps.LatLng(lat, lng);
+            e = projection.fromLatLngToDivPixel(e);
+            return [e.x, e.y]
+            // return [ e.x, e.y ]
+        }
+
+
+        // Add the container when the overlay is added to the map.
+        overlay.onAdd = function() {
+            var layer = d3.select(this.getPanes().overlayLayer).append("div")
+                    .attr("height", "100%")
+                    .attr("width", "100%")
+                    .attr("class", "markers")
+                    .attr("id", "layer")
+
+            layer.node().style.width = "1366px";
+            layer.node().parentNode.style.width = "100%";
+            layer.node().parentNode.style.height = "100%";
+            layer.node().parentNode.parentNode.style.width = "100%";
+            layer.node().parentNode.parentNode.style.height = "100%";
+            layer.node().parentNode.parentNode.parentNode.style.width = "100%";
+            layer.node().parentNode.parentNode.parentNode.style.height = "100%";
+            layer.node().parentNode.parentNode.parentNode.parentNode.style.width = "100%";
+            layer.node().parentNode.parentNode.parentNode.parentNode.style.height = "100%";
+
+
+            var svg = layer.append('svg')
+                    .attr('x', 0)
+                    .attr('y', 0)
+            var   padding = 10;
+            var lineFn = d3.svg.line()
+                    .x(function (d) {
+                        e = _projection(d.lat, d.log);
+                        return e[0] + padding
+                    })
+                    .y(function (d) {
+                        e = _projection(d.lat, d.log);
+                        return e[1] + padding
+                    })
+
+
+            // Draw each marker as a separate SVG element.
+            // We could use a single SVG, but what size would it have?
+            overlay.draw = function() {
+                projection = this.getProjection();
+
+
+                var boundingRect = layer.node().getBoundingClientRect()
+                svg.attr('width', boundingRect.width)
+                        .attr('height', boundingRect.height)
+
+
+//
+//                var marker = layer.selectAll("svg")
+//                        .data(data.nodes)
+//                        .each(transform) // update existing markers
+//                        .enter().append("svg:svg")
+//                        .each(transform)
+//                        .attr("class", "node")
+//                        .attr("transform", function(d) { return "translate(" + d.lat + "," + d.log + ")"; })
+//                        .on('click', function (d) {
+//                            window.location = '#' + locationHashMapping[d.group] + ":" + d.name;
+//                            catchLocationHash() /* when a node is click... */
+//                        });
+//
+//                // Add a circle.
+//                marker.append("svg:circle")
+//                        .attr("r", function(d) { return d.w; })
+//                        .style("fill", function(d) { return nodeColors[d.group] })
+//                        .attr("cx", padding)
+//                        .attr("cy", padding);
+//
+//                // Add a label.
+//                marker.append("svg:text")
+//                        .attr("x", padding + 7)
+//                        .attr("y", padding)
+//                        .attr("dy", ".31em")
+//                        .text(function(d) { return d.key; });
+
+//                link = layer.selectAll("path")
+//                        .data(data.links)
+//                        .enter()
+//                        .append("svg:svg").attr("width", "100%").attr("width","100%").style("position", "absolute")
+//                        .append("svg:path")
+//                        .attr("stroke", "#FF3020")
+//                        .attr("d", function(d) {
+//
+//                            var target = data.nodes.filter(function(x){return x.id == d.target;})[0];
+//                            var source = data.nodes.filter(function(x){return x.id == d.source;})[0];
+//                            var dx = target.lat - source.lat,
+//                                    dy = target.log - source.log,
+//                                    dr = Math.sqrt(dx * dx + dy * dy);
+//
+//                            var e = transform_path(target,source)
+//                            var p = 'M' + e.join('L') + 'Z'
+//                            console.log( 'PATH: ' + p)
+//                            return p
+//                        }).attr("fill", "none").attr("stroke", "black");
+
+
+
+
+
+//                var points = svg.selectAll('.point-container').data(data.nodes)
+//                points.enter().append('g')
+//                        .each(function (d) {
+//                            var point = d3.select(this)
+//                            point.append("svg:circle")
+//                                    .attr("r", 4.5)
+//                                    .attr("cx", padding)
+//                                    .attr("cy", padding)
+//                                    .attr("class", "point pts")
+//                            point.append("svg:text")
+//                                    .attr("x", padding + 7)
+//                                    .attr("y", padding)
+//                                    .attr("dy", ".31em")
+//                                    .text(function (d) {
+//                                        return d.name;
+//                                    });
+//
+//                        })
+//                points.attr('transform', transform)
+//                        .attr('class', 'point-container')
+//
+//
+                var line = svg.selectAll('.path').data(data.links)
+                line.enter().append('path')
+                line.attr('class', 'path')
+                        .attr('d', lineFn)
+
+
+                function transform(d) {
+
+                    d = new google.maps.LatLng(d.lat, d.log);
+                    d = projection.fromLatLngToDivPixel(d);
+                    return d3.select(this)
+                            .style("left", (d.x -padding) + "px")
+                            .style("top", (d.y -padding) + "px");
+                }
+
+
+
+
+//                function transform(d) {
+//
+//                    e = _projection(d.lat, d.log)
+//                    return "translate(" + e[0] + ", " + e[1] + ")"
+//                }
+
+//
+//                function transform_path(target, source) {
+//                    var d = []
+//
+////                        var c = _projection( source.lat, source.log )
+////                        console.log( ' path point: ' + JSON.stringify(source) + ' -> left: ' + c[0] + ", top: " + c[1])
+////                        d.push( c )
+////
+////                        c = _projection( target.lat, target.log )
+////                        console.log( ' path point: ' + JSON.stringify(target) + ' -> left: ' + c[0] + ", top: " + c[1])
+////                        d.push( c )
+//                    d.push([source.x,source.y]);
+//                    d.push([target.x,target.y]);
+//
+//                    return d
+//                }
+            };
+        };
+
+        // Bind our overlay to the map…
+        overlay.setMap(map);
+
+        catchLocationHash(true);
+    });
+
+//        rect.on('click', blurNodes);
+    window.addEventListener("hashchange", catchLocationHash.bind(this, false), false);
+
+
+    /* highlight node d */
+    function selectNode(d, focus) {
+        blurNodes();
+        node.attr("class", "node background");
+        d3.select(this).attr("class", "node hover");
+        link.filter(function (_d) {
+            return _d.source == d.id;
+        })
+                .attr("class", "link hover")
+                .each(function (_d) {
+                    node.filter(function (_n) {
+                        return _n.id == _d.target.id
+                    })
+                            .attr("class", "node hover")
+                            .style("fill", function(d) { return "#C3FF68"});
+                });
+
+        if (focus) {
+            var coordinates = null;
+            node.each(function (_n) {
+                if (_n.id == d.id) {
+                    coordinates = [_n.x, _n.y];
+                }
+            });
+            if (coordinates) {
+
+                var x = (coordinates[0] * -1) + width / 2;
+                var y = (coordinates[1] * -1) + height / 2;
+
+                zoomer.translate([x, y]);
+                zoomer.scale(1);
+
+                svg.transition()
+                        .attr("transform", "translate(" + x + ", " + y + ") scale(1)");
+
+            }
+        }
+    }
+
+//    function zoom() {
+//        svg.attr("transform", "translate(" + d3.event.translate + ") scale(" + d3.event.scale + ")");
+//    }
+
+    function blurNodes() {
+        node.attr("class", "node");
+        link.attr("class", "link");
+    }
+
+
+    /** assume url is https://fatiherikli.github.io/programming-language-network/#language:C
+     * group: language
+     * hashParts[1]: C
+     * focus: boolean
+     * if group is not found, return false
+     * else iterate all nodes,
+     */
+    function catchLocationHash(focus) {
+        var hash = location.hash;
+        if (hash && hash.indexOf(":") > 0) {
+            var group = null,
+                    hashParts = hash.substr(1).split(":");
+            hashParts[1] = hashParts[1].replace(/%20/g, ' ');
+            hashParts[1] = hashParts[1].replace(/%22/g, '');
+            for (var key in locationHashMapping) {
+                if (locationHashMapping[key] == hashParts[0]) {
+                    group = key;
+                }
+            }
+            if (!group) {
+                return false;
+            }
+            /*
+             ds = graphSource.nodes.filter(function(x){ return (x['group'] == group) && (x['name'] == hashParts[1]) })
+             $(ds).each(function (d){
+             selectNode.call(this, d, focus);
+             console.log('highlight node');
+             })
+             selectNode.call(this, d, focus);
+             */
+            d3.selectAll(".node").each(function (d) {
+                if ( (d.group == group) && (d.name == hashParts[1]) ) {
+                    selectNode.call(this, d, focus);
+                    console.log('highlight node');
+                }
+            })
+        }
+    }
+
+}
+
+
+
+</script>
+
+
+</body>
+</html>
